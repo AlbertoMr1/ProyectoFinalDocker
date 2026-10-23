@@ -1,0 +1,84 @@
+services:
+  backend:
+    build:
+      context: ./vendor/laravel/sail/runtimes/8.4
+      dockerfile: Dockerfile
+      args:
+        WWWGROUP: '${WWWGROUP:-1000}'
+    image: sail-8.4/app
+    container_name: backend
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    ports:
+      - '${BACKEND_PORT:-80}:80'
+    environment:
+      WWWUSER: '${WWWUSER:-1000}'
+      LARAVEL_SAIL: 1
+      APP_URL: '${APP_URL}'
+      DB_CONNECTION: '${DB_CONNECTION}'
+      DB_HOST: '${DB_HOST}'
+      DB_PORT: '${DB_PORT}'
+      DB_DATABASE: '${DB_DATABASE}'
+      DB_USERNAME: '${DB_USERNAME}'
+      DB_PASSWORD: '${DB_PASSWORD}'
+      MAIL_MAILER: '${MAIL_MAILER}'
+      MAIL_HOST: '${MAIL_HOST}'
+      MAIL_PORT: '${MAIL_PORT}'
+    volumes:
+      - '.:/var/www/html'
+    networks:
+      - red-app
+    depends_on:
+      - mariadb
+      - mailpit
+
+  frontend:
+    image: node:22-alpine
+    container_name: frontend
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install && pnpm run dev --host 0.0.0.0"
+    ports:
+      - '${FRONTEND_PORT:-5173}:5173'
+    environment:
+      VITE_API_URL: '${APP_URL:-http://localhost}'
+    volumes:
+      - './frontend:/app'
+    networks:
+      - red-app
+    depends_on:
+      - backend
+
+  mariadb:
+    image: 'mariadb:11'
+    container_name: mariadb
+    ports:
+      - '${FORWARD_DB_PORT:-3306}:3306'
+    environment:
+      MYSQL_ROOT_PASSWORD: '${DB_PASSWORD}'
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_DATABASE: '${DB_DATABASE}'
+      MYSQL_USER: '${DB_USERNAME}'
+      MYSQL_PASSWORD: '${DB_PASSWORD}'
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+    volumes:
+      - 'sail-mariadb:/var/lib/mysql'
+    networks:
+      - red-app
+
+  mailpit:
+    image: 'axllent/mailpit:latest'
+    container_name: mailpit
+    ports:
+      - '${FORWARD_MAILPIT_PORT:-1025}:1025'
+      - '${FORWARD_MAILPIT_DASHBOARD_PORT:-8025}:8025'
+    networks:
+      - red-app
+
+networks:
+  red-app:
+    driver: bridge
+    name: red-app
+
+volumes:
+  sail-mariadb:
+    driver: local
